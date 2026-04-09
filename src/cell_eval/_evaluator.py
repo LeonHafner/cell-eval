@@ -1,6 +1,8 @@
 import logging
 import multiprocessing as mp
 import os
+
+import numba
 from typing import Any, Literal
 
 import anndata as ad
@@ -91,7 +93,7 @@ class MetricsEvaluator:
                 anndata_pair=self.anndata_pair,
                 de_pred=de_pred,
                 de_real=de_real,
-                num_threads=num_threads if num_threads != -1 else mp.cpu_count(),
+                num_threads=num_threads if num_threads != -1 else min(mp.cpu_count(), numba.get_num_threads()),
                 allow_discrete=allow_discrete,
                 outdir=outdir,
                 prefix=prefix,
