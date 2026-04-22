@@ -306,13 +306,11 @@ def _load_or_build_de(
             pathname = f"{mode}_de.csv" if not prefix else f"{prefix}_{mode}_de.csv"
             logger.info(f"Writing {mode} DE results to: {pathname}")
             frame.write_csv(os.path.join(outdir, pathname))
-
-        return frame  # type: ignore
     elif isinstance(de_path, str):
         logger.info(f"Reading {mode} DE results from {de_path}")
         if pdex_kwargs:
             logger.warning("pdex_kwargs are ignored when reading from a CSV file")
-        return pl.read_csv(
+        frame = pl.read_csv(
             de_path,
             schema_overrides={
                 "target": pl.Utf8,
@@ -322,10 +320,20 @@ def _load_or_build_de(
     elif isinstance(de_path, pl.DataFrame):
         if pdex_kwargs:
             logger.warning("pdex_kwargs are ignored when reading from a CSV file")
-        return de_path
+        frame = de_path
     elif isinstance(de_path, pd.DataFrame):
         if pdex_kwargs:
             logger.warning("pdex_kwargs are ignored when reading from a CSV file")
-        return pl.from_pandas(de_path)
+        frame = pl.from_pandas(de_path)
     else:
         raise TypeError(f"Unexpected type for de_path: {type(de_path)}")
+
+    # pdex's `fold_change` column is already log2(target_mean / ref_mean).
+    # Surface it under the name cell-eval expects so DEResults.__post_init__
+    # does not re-apply log2 and zero out negatives via fill_nan(0.0).
+    if "fold_change" in frame.columns and "log2_fold_change" not in frame.columns:
+        frame = frame.with_columns(
+            pl.col("fold_change").alias("log2_fold_change"),
+            pl.col("fold_change").abs().alias("abs_log2_fold_change"),
+        )
+    return frame  # type: ignore
