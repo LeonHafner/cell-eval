@@ -99,6 +99,7 @@ class DEResults:
 
         # Add log2 fold change columns if not present
         if self.log2_fold_change_col not in self.data.columns:
+            logger.info(f"Adding log2 fold change columns ({self.name})")
             self.data = self.data.with_columns(
                 pl.col(self.fold_change_col)
                 .log(base=2)
@@ -109,6 +110,19 @@ class DEResults:
                 .abs()
                 .alias(self.abs_log2_fold_change_col)
             )
+        else:
+            logger.info(f"Log2 fold change columns already present ({self.name})")
+
+        # Sanity check: a healthy log2_fold_change column should rarely be exactly 0.
+        # If pdex's `fold_change` was already log2 (post pdex 0.2.0) and we
+        # re-applied log2 here, every negative input becomes NaN, then
+        # fill_nan(0.0) zeros it -> typically ~half the rows end up as 0.
+        n_total = self.data.height
+        n_zero = self.data.filter(pl.col(self.log2_fold_change_col) == 0.0).height
+        frac_zero = n_zero / n_total if n_total else 0.0
+        logger.info(
+            f"log2_fold_change zero-count: {n_zero}/{n_total} ({100 * frac_zero:.1f}%) ({self.name})"
+        )
 
         # Enforce types
         self.data = self.data.with_columns(
